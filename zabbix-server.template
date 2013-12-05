@@ -1,0 +1,248 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Zabbix2.0 server template",
+
+  "Parameters": {
+    "SSHFrom" : {
+      "Description" : "CIDR of SSH access.",
+      "Type" : "String",
+      "Default" : "0.0.0.0/0"
+    },
+    "HTTPFrom" : {
+      "Description" : "CIDR of HTTP access.",
+      "Type" : "String",
+      "Default" : "0.0.0.0/0"
+    },
+    "AgentFrom" : {
+      "Description" : "CIDR of Zabbix agents.",
+      "Type" : "String",
+      "Default" : "0.0.0.0/0"
+    },
+    "VpcId" : {
+      "Description" : "VPC ID to which Zabbix server belongs.",
+      "Type" : "String",
+      "Default" : "vpc-xxxxxxxx"
+    },
+    "SubnetId" : {
+      "Description" : "SubnetID to which Zabbix server belongs.",
+      "Type" : "String",
+      "Default" : "subnet-xxxxxxxx"
+    },
+    "InstanceType" : {
+      "Description" : "EC2 instance type",
+      "Type" : "String",
+      "Default" : "t1.micro",
+      "AllowedPattern": "[.a-z0-9]*",
+      "ConstraintDescription" : "must be a valid EC2 instance type."
+    },
+    "KeyName": {
+      "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instances",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "64",
+      "AllowedPattern": "[-_ a-zA-Z0-9]*",
+      "ConstraintDescription": "can contain only alphanumeric characters, spaces, dashes and underscores."
+    }
+  },
+
+  "Mappings": {
+    "AWSAmazonLinuxAMI": {
+      "us-east-1":      { "name":"Virginia",   "201303": "ami-3275ee5b", "201309": "ami-35792c5c" },
+      "us-west-2":      { "name":"Oregon",     "201303": "ami-ecbe2adc", "201309": "ami-d03ea1e0" },
+      "us-west-1":      { "name":"California", "201303": "ami-66d1fc23", "201309": "ami-687b4f2d" },
+      "eu-west-1":      { "name":"Ireland",    "201303": "ami-44939930", "201309": "ami-149f7863" },
+      "ap-southeast-1": { "name":"Singapole",  "201303": "ami-aa9ed2f8", "201309": "ami-14f2b946" },
+      "ap-southeast-2": { "name":"Sydney",     "201303": "ami-363eaf0c", "201309": "ami-a148d59b" },
+      "ap-northeast-1": { "name":"Tokyo",      "201303": "ami-173fbf16", "201309": "ami-3561fe34" },
+      "sa-east-1":      { "name":"SaoPaulo",   "201303": "ami-dd6bb0c0", "201309": "ami-9f6ec982" }
+    },
+    "AZ": {
+      "us-east-1":      { "primary": "us-east-1b",      "secondary": "us-east-1c" },
+      "us-west-2":      { "primary": "us-west-2a",      "secondary": "us-west-2b" },
+      "us-west-1":      { "primary": "us-west-1a",      "secondary": "us-west-1b" },
+      "eu-west-1":      { "primary": "eu-west-1a",      "secondary": "eu-west-1b" },
+      "ap-southeast-1": { "primary": "ap-southeast-1a", "secondary": "ap-southeast-1b" },
+      "ap-southeast-2": { "primary": "ap-southeast-2a", "secondary": "ap-southeast-2b" },
+      "ap-northeast-1": { "primary": "ap-northeast-1a", "secondary": "ap-northeast-1c" },
+      "sa-east-1":      { "primary": "sa-east-1a",      "secondary": "sa-east-1b" }
+    },
+    "Zabbix": {
+      "DB": { "name": "zabbix", "user": "zabbix", "password": "zabbix" }
+    }
+  },
+
+  "Resources": {
+    "ZabbixRole" : {
+      "Type" : "AWS::IAM::Role",
+      "Properties" : {
+        "AssumeRolePolicyDocument" : {
+          "Statement": [ {
+            "Effect": "Allow",
+              "Principal": {
+                "Service": [ "ec2.amazonaws.com" ]
+              },
+              "Action": [ "sts:AssumeRole" ]
+          } ]
+        },
+        "Path" : "/",
+        "Policies" :[ {
+          "PolicyName" : "ZabbixPolicy",
+          "PolicyDocument" : {
+            "Statement": [ {
+              "Sid": "ZabbixStmt",
+              "Effect": "Allow",
+              "NotAction": "iam:*",
+              "Resource": "*"
+            } ]
+          }
+        }]
+      }
+    },
+    "ZabbixProfile" : {
+      "Type" : "AWS::IAM::InstanceProfile",
+      "Properties" : {
+        "Path": "/",
+        "Roles" : [ { "Ref" : "ZabbixRole" } ]
+      }
+    },
+    "ZabbixSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "VpcId" : { "Ref" : "VpcId" },
+        "GroupDescription" : "Enable Zabbix Active Agent(10051), SSH, HTTP",
+        "SecurityGroupIngress" : [
+          { "IpProtocol" : "tcp", "FromPort" : "10051",  "ToPort" : "10051",  "CidrIp" : { "Ref" : "AgentFrom" }},
+          { "IpProtocol" : "tcp", "FromPort" : "22",  "ToPort" : "22",  "CidrIp" : { "Ref" : "SSHFrom" }},
+          { "IpProtocol" : "tcp", "FromPort" : "80",  "ToPort" : "80",  "CidrIp" : { "Ref" : "HTTPFrom" }}
+        ]
+      }
+    },
+    "ZabbixServerEIP": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc",
+        "InstanceId": { "Ref": "ZabbixServer" }
+      }
+    },
+    "ZabbixServer": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "InstanceType": { "Ref": "InstanceType" },
+        "KeyName": { "Ref": "KeyName" },
+        "SubnetId": { "Ref" : "SubnetId" },
+        "SourceDestCheck": "false",
+        "ImageId": { "Fn::FindInMap": [ "AWSAmazonLinuxAMI", { "Ref": "AWS::Region" }, "201309" ]},
+        "IamInstanceProfile": { "Ref" : "ZabbixProfile" },
+        "SecurityGroupIds" : [
+          { "Ref" : "ZabbixSecurityGroup" }
+        ],
+        "Tags": [
+          { "Key": "Name", "Value": "zabbix-server" }
+        ],
+        "UserData" : { "Fn::Base64" : { "Fn::Join" : ["", [
+          "#! /bin/bash -v\n",
+          "yum update -y\n",
+
+          "# Install packages\n",
+          "/opt/aws/bin/cfn-init -s ", { "Ref" : "AWS::StackId" }, " -r ZabbixServer -c create",
+          "    --region ", { "Ref" : "AWS::Region" }
+        ]]}}
+      },
+      "Metadata" : {
+        "AWS::CloudFormation::Init" : {
+          "configSets" : {
+              "create" : [ "install", "configure", "start", "setupDB" ]
+          },
+          "install" : {
+            "packages" : {
+              "rpm" : {
+                "zabbix" : "http://repo.zabbix.com/zabbix/2.0/rhel/6/x86_64/zabbix-release-2.0-1.el6.noarch.rpm"
+              },
+              "yum" : {
+                "zabbix-server-mysql"   : [],
+                "zabbix-web-mysql"   : [],
+                "zabbix-web-japanese"   : [],
+                "mysql-server"   : []
+              }
+            }
+          },
+          "configure" : {
+            "commands" : {
+              "00httpdAcl" : {
+                "command" : { "Fn::Join" : ["", [
+                  "sed -i.bak '/Order/d' /etc/httpd/conf.d/zabbix.conf;",
+                  "sed -i 's/Deny from all/Require all denied/' /etc/httpd/conf.d/zabbix.conf;",
+                  "sed -i 's/Allow from all/Require all granted/' /etc/httpd/conf.d/zabbix.conf;"
+                ]]},
+                "test" : { "Fn::Join" : ["", [
+                  "VERSION=$(httpd -v|grep version|cut -d '/' -f2|cut -d ' ' -f1|cut -d '.' -f1,2);",
+                  "FLAG=$(echo \"$VERSION >= 2.4\"|bc);",
+                  "test $FLAG -eq 1;"
+                ]]}
+              },
+              "01httpdTimezone" : {
+                "command" : { "Fn::Join" : ["", [
+                  "sed -ie 's/# php_value date.timezone.*$/php_value date.timezone Asia\\/tokyo/' /etc/httpd/conf.d/zabbix.conf;"
+                ]]}
+              },
+              "02zabbixServerConf" : {
+                "command" : { "Fn::Join" : ["", [
+                  "sed -i.bak -e '/^DB\\(Name\\|User\\|Password\\)/d' /etc/zabbix/zabbix_server.conf;",
+                  "sed -i 's/# DBName=/DBName=", {"Fn::FindInMap": [ "Zabbix", "DB", "name" ]}, "/' /etc/zabbix/zabbix_server.conf;",
+                  "sed -i 's/# DBUser=/DBUser=", {"Fn::FindInMap": [ "Zabbix", "DB", "user" ]}, "/' /etc/zabbix/zabbix_server.conf;",
+                  "sed -i 's/# DBPassword=/DBPassword=", {"Fn::FindInMap": [ "Zabbix", "DB", "password" ]}, "/' /etc/zabbix/zabbix_server.conf;"
+                ]]}
+              }
+            }
+          },
+          "start" : {
+            "services" : {
+              "sysvinit" : {
+                "mysqld"   : { "enabled" : "true", "ensureRunning" : "true" },
+                "zabbix-server"   : { "enabled" : "true", "ensureRunning" : "true" },
+                "httpd"   : { "enabled" : "true", "ensureRunning" : "true" }
+              }
+            }
+          },
+          "setupDB" : {
+            "commands" : {
+              "00createDB" : {
+                "command" : { "Fn::Join" : ["", [
+                  "mysqladmin create ",  {"Fn::FindInMap": [ "Zabbix", "DB", "name" ]}, " --default-character-set=utf8"
+                ]]}
+              },
+              "01createUser" : {
+                "command" : { "Fn::Join" : ["", [
+                  "mysql -uroot -e \"GRANT ALL PRIVILEGES ON ",  {"Fn::FindInMap": [ "Zabbix", "DB", "name" ]}, ".* to ", {"Fn::FindInMap": [ "Zabbix", "DB", "user" ]}, "@localhost IDENTIFIED BY '", {"Fn::FindInMap": [ "Zabbix", "DB", "password" ]}, "';",
+                  "FLUSH PRIVILEGES;\""
+                ]]}
+              },
+              "02createSchema" : {
+                "command" : { "Fn::Join" : ["", [
+                  "mysql -uroot ", {"Fn::FindInMap": [ "Zabbix", "DB", "name" ]}, " < $(rpm -ql zabbix-server-mysql|grep schema.sql)"
+                ]]}
+              },
+              "03insertImages" : {
+                "command" : { "Fn::Join" : ["", [
+                  "mysql -uroot ", {"Fn::FindInMap": [ "Zabbix", "DB", "name" ]}, " < $(rpm -ql zabbix-server-mysql|grep images.sql)"
+                ]]}
+              },
+              "04insertData" : {
+                "command" : { "Fn::Join" : ["", [
+                  "mysql -uroot ", {"Fn::FindInMap": [ "Zabbix", "DB", "name" ]}, " < $(rpm -ql zabbix-server-mysql|grep data.sql)"
+                ]]}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+
+  "Outputs": {
+    "ZabbixServer" : {
+      "Description" : "Zabbix Server Endpoint",
+      "Value" : { "Fn::Join" : [ "", ["http://", { "Ref" : "ZabbixServerEIP" }, "/zabbix/" ] ]}
+    }
+  }
+}

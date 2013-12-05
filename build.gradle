@@ -9,7 +9,7 @@ buildscript {
 }
 
 ext {
-	artifactId = 'cfnbase'
+	artifactId = 'zabbix-server'
 	templateBucket = 'cm-public-cfn-templates'
 }
 
