@@ -243,6 +243,26 @@
     "ZabbixServer" : {
       "Description" : "Zabbix Server Endpoint",
       "Value" : { "Fn::Join" : [ "", ["http://", { "Ref" : "ZabbixServerEIP" }, "/zabbix/" ] ]}
+    },
+    "DBName" : {
+      "Description" : "used at \"Configure DB connection\"",
+      "Value" : { "Fn::Join" : [ "", [ "Database name: ", {"Fn::FindInMap": [ "Zabbix", "DB", "name" ]} ]]}
+    },
+    "DBUser" : {
+      "Description" : "used at \"Configure DB connection\"",
+      "Value" : { "Fn::Join" : [ "", [ "User: ", {"Fn::FindInMap": [ "Zabbix", "DB", "user" ]} ]]}
+    },
+    "DBPassoword" : {
+      "Description" : "used at \"Configure DB connection\"",
+      "Value" : { "Fn::Join" : [ "", [ "Passoword: ", {"Fn::FindInMap": [ "Zabbix", "DB", "password" ]} ]]}
+    },
+    "ZabbixAgentInPriveteNetwork" : {
+      "Description" : "configure \"/etc/zabbix/zabbix_agentd.conf\"",
+      "Value" : { "Fn::Join" : [ "", [ "Server=", {"Fn::GetAtt": [ "ZabbixServer", "PrivateIp" ]} ]]}
+    },
+    "ZabbixAgentInPublicNetwork" : {
+      "Description" : "configure \"/etc/zabbix/zabbix_agentd.conf\"",
+      "Value" : { "Fn::Join" : [ "", [ "Server=", { "Ref" : "ZabbixServerEIP" } ]]}
     }
   }
 }
